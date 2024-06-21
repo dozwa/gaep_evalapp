@@ -46,7 +46,7 @@ def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids)
 
 # Groundtruths abrufen und sortieren
 def get_sorted_groundtruths(question_id):
-    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHS WHERE question_id = '{str(question_id)}'")
+    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGEMENTS WHERE question_id = '{str(question_id)}'")
     return sorted(groundtruths, key=lambda x: x[2])
 
 # Antwortsegmente abrufen und sortieren
