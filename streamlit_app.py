@@ -15,21 +15,16 @@ def get_db_connection():
             port=st.secrets["port"]
         )
         if connection.is_connected():
-            st.success("Verbindung zur Datenbank erfolgreich hergestellt.")
             return connection
-        else:
-            st.error("Verbindung zur Datenbank fehlgeschlagen.")
-            return None
     except Error as e:
-        st.error(f"Fehler bei der Verbindung zur MySQL-Datenbank: {e}")
+        st.error(f"Error connecting to MySQL database: {e}")
         return None
 
 # Kontextmanager für Datenbankverbindungen
 @contextmanager
 def get_db_cursor():
     cnx = get_db_connection()
-    if cnx is None or not cnx.is_connected():
-        st.error("Datenbankverbindung ist nicht verfügbar.")
+    if cnx is None:
         yield None, None
     else:
         cursor = cnx.cursor()
@@ -47,7 +42,7 @@ def get_data(query):
             cursor.execute(query)
             return cursor.fetchall()
         except Error as e:
-            st.error(f"Fehler beim Ausführen der Abfrage: {e}")
+            st.error(f"Error executing query: {e}")
             return []
 
 # Daten in die Datenbank schreiben
@@ -62,7 +57,7 @@ def push_data(query, params=None):
                 cursor.execute(query)
             cnx.commit()
         except Error as e:
-            st.error(f"Fehler beim Ausführen der Abfrage: {e}")
+            st.error(f"Error executing query: {e}")
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
@@ -122,7 +117,7 @@ def render_reviewer_info():
     # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
-    allowed_ids = st.secrets["reviewer_ids"]
+    allowed_ids = ["6452","8640","3224","6511","5445"]
     if reviewer_id not in allowed_ids:
         st.session_state['error_message'] = "Ungültige Prüfer ID. Bitte wählen Sie eine gültige ID aus der Liste."
     else:
