@@ -8,11 +8,11 @@ from contextlib import contextmanager
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
-            user='urofyf7yemvwir48',
-            password='qUfpK7tyhVRLqUu5dyW',
-            host='bw3wdzmrvuqkmv7lrsjo-mysql.services.clever-cloud.com',
-            database='bw3wdzmrvuqkmv7lrsjo',
-            port=21196
+            user=st.secrets["user"],
+            password=st.secrets["password"],
+            host=st.secrets["host"],
+            database='st.secrets["database"],
+            port=st.secrets["port"]
         )
         if connection.is_connected():
             return connection
