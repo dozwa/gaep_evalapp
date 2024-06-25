@@ -1,8 +1,9 @@
 import streamlit as st
 import mysql.connector
 
-# Datenbankverbindung herstellen
-def connect_to_db():
+# Caching für die Datenbankverbindung
+@st.cache_resource
+def get_db_connection():
     return mysql.connector.connect(
         user=st.secrets["user"],
         password=st.secrets["password"],
@@ -13,17 +14,16 @@ def connect_to_db():
 
 # Daten aus der Datenbank abrufen
 def get_data(query):
-    cnx = connect_to_db()
+    cnx = get_db_connection()
     cursor = cnx.cursor()
     cursor.execute(query)
-    response = [row for row in cursor]
+    response = cursor.fetchall()
     cursor.close()
-    cnx.close()
     return response
 
 # Daten in die Datenbank schreiben
 def push_data(query, params=None):
-    cnx = connect_to_db()
+    cnx = get_db_connection()
     cursor = cnx.cursor()
     if params:
         cursor.execute(query, params)
@@ -31,7 +31,6 @@ def push_data(query, params=None):
         cursor.execute(query)
     cnx.commit()
     cursor.close()
-    cnx.close()
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
@@ -44,12 +43,13 @@ def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids)
         params = (groundtruthsegment_id, additional_text, reviewer_id, evaluation)
         push_data(query, params)
 
-# Groundtruths abrufen und sortieren
+# Caching der Groundtruths und Answersegments
+@st.cache_data(ttl=600)
 def get_sorted_groundtruths(question_id):
     groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGEMENTS WHERE question_id = '{str(question_id)}'")
     return sorted(groundtruths, key=lambda x: x[2])
 
-# Antwortsegmente abrufen und sortieren
+@st.cache_data(ttl=600)
 def get_sorted_answersegments(answer_id):
     answersegments = get_data(f"SELECT * FROM ANSWERSEGMENTS WHERE answer_id = '{str(answer_id)}'")
     return sorted(answersegments, key=lambda x: x[2])
@@ -59,19 +59,14 @@ def initialize_state():
     if 'dataset_index' not in st.session_state:
         st.session_state['dataset_index'] = 0
 
-    if 'evaluations' not in st.session_state:
-        st.session_state['evaluations'] = [
-            [0 for _ in range(len(get_sorted_answersegments(qna_ids_list[0][0])))] 
-            for _ in range(len(qna_ids_list))
-        ]
+    if 'evaluations' not in st.session_state or not st.session_state['evaluations']:
+        answer_segments_count = len(get_sorted_answersegments(qna_ids_list[0][0]))
+        st.session_state['evaluations'] = [[0] * answer_segments_count for _ in range(len(qna_ids_list))]
 
-    if 'additional_texts' not in st.session_state:
-        st.session_state['additional_texts'] = [
-            ["" for _ in range(len(get_sorted_answersegments(qna_ids_list[0][0])))] 
-            for _ in range(len(qna_ids_list))
-        ]
+    if 'additional_texts' not in st.session_state or not st.session_state['additional_texts']:
+        answer_segments_count = len(get_sorted_answersegments(qna_ids_list[0][0]))
+        st.session_state['additional_texts'] = [[""] * answer_segments_count for _ in range(len(qna_ids_list))]
 
-    # Initialisieren Sie den Schlüssel 'error_message'
     if 'error_message' not in st.session_state:
         st.session_state['error_message'] = ""
 
@@ -95,7 +90,7 @@ def render_reviewer_info():
     # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
-    allowed_ids = st.secrets["reviewer_ids"],
+    allowed_ids = st.secrets["reviewer_ids"]
     if reviewer_id not in allowed_ids:
         st.session_state['error_message'] = "Ungültige Prüfer ID. Bitte wählen Sie eine gültige ID aus der Liste."
     else:
@@ -107,7 +102,7 @@ def render_reviewer_info():
             st.session_state['evaluations'][st.session_state['dataset_index']],
             st.session_state['additional_texts'][st.session_state['dataset_index']],
             reviewer_id,
-            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index']][1])]
+            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index'][1]])]
         ), 
         key="senden", 
         disabled=bool(st.session_state['error_message'])
@@ -151,10 +146,6 @@ def render_main_content():
         sorted_answersegments = get_sorted_answersegments(qna_ids_list[current_index][0])
         for answer in sorted_answersegments:
             st.write(answer[2], answer[3])  # 2 = Index, 3 = Text
-    
-    # Kommentarfunktion nicht implementiert: DB Verbindung fehlt
-    # st.header("Kommentare") 
-    # st.text_area("Bitte geben Sie hier Ihre Kommentare ein.", height=100, key='comment')
 
 # Setzen Sie das Layout auf "wide"
 st.set_page_config(layout="wide")
