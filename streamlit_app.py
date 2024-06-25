@@ -46,7 +46,7 @@ def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids)
 # Caching der Groundtruths und Answersegments
 @st.cache_data(ttl=600)
 def get_sorted_groundtruths(question_id):
-    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGEMENTS WHERE question_id = '{str(question_id)}'")
+    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGMENTS WHERE question_id = '{str(question_id)}'")
     return sorted(groundtruths, key=lambda x: x[2])
 
 @st.cache_data(ttl=600)
