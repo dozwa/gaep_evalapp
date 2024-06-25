@@ -117,7 +117,7 @@ def render_reviewer_info():
     # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
-    allowed_ids = ["6452","8640","3224","6511"]
+    allowed_ids = st.secrets["reviewer_ids"]
     if reviewer_id not in allowed_ids:
         st.session_state['error_message'] = "Ungültige Prüfer ID. Bitte wählen Sie eine gültige ID aus der Liste."
     else:
