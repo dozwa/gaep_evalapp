@@ -15,16 +15,21 @@ def get_db_connection():
             port=st.secrets["port"]
         )
         if connection.is_connected():
+            st.success("Verbindung zur Datenbank erfolgreich hergestellt.")
             return connection
+        else:
+            st.error("Verbindung zur Datenbank fehlgeschlagen.")
+            return None
     except Error as e:
-        st.error(f"Error connecting to MySQL database: {e}")
+        st.error(f"Fehler bei der Verbindung zur MySQL-Datenbank: {e}")
         return None
 
 # Kontextmanager für Datenbankverbindungen
 @contextmanager
 def get_db_cursor():
     cnx = get_db_connection()
-    if cnx is None:
+    if cnx is None or not cnx.is_connected():
+        st.error("Datenbankverbindung ist nicht verfügbar.")
         yield None, None
     else:
         cursor = cnx.cursor()
@@ -42,7 +47,7 @@ def get_data(query):
             cursor.execute(query)
             return cursor.fetchall()
         except Error as e:
-            st.error(f"Error executing query: {e}")
+            st.error(f"Fehler beim Ausführen der Abfrage: {e}")
             return []
 
 # Daten in die Datenbank schreiben
@@ -57,7 +62,7 @@ def push_data(query, params=None):
                 cursor.execute(query)
             cnx.commit()
         except Error as e:
-            st.error(f"Error executing query: {e}")
+            st.error(f"Fehler beim Ausführen der Abfrage: {e}")
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
@@ -145,6 +150,7 @@ def render_reviewer_info():
     * 3 – Inhalt der Groundtruth ist nicht zum großen Teil durch die Antwortsegmente abgebildet
     * 4 – Inhalt der Groundtruth ist vollständig durch die Antwortsegmente abgebildet""")
     st.sidebar.markdown("Zusätzlich sollen für jede Groundtruth-Aussage die relevanten Aussagen aus den Antwortsegmenten angegeben, die zur Abdeckung beigetragen haben. Bitte referenzieren Sie die Antwortsegmente mit ihren Indizes. Trennen Sie diese mit einem Komma. Beispiel: `1,3,5`")
+
 # Hauptinhalt rendern
 def render_main_content():
     current_index = st.session_state['dataset_index']
