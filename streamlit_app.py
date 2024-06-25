@@ -11,7 +11,7 @@ def get_db_connection():
             user=st.secrets["user"],
             password=st.secrets["password"],
             host=st.secrets["host"],
-            database='st.secrets["database"],
+            database=st.secrets["database"],
             port=st.secrets["port"]
         )
         if connection.is_connected():
