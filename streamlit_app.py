@@ -8,11 +8,11 @@ from contextlib import contextmanager
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
-            user=st.secrets["user"],
-            password=st.secrets["password"],
-            host=st.secrets["host"],
-            database=st.secrets["database"],
-            port=st.secrets["port"]
+            user='urofyf7yemvwir48',
+            password='qUfpK7tyhVRLqUu5dyW',
+            host='bw3wdzmrvuqkmv7lrsjo-mysql.services.clever-cloud.com',
+            database='bw3wdzmrvuqkmv7lrsjo',
+            port=21196
         )
         if connection.is_connected():
             return connection
@@ -33,34 +33,35 @@ def get_db_cursor():
         finally:
             cursor.close()
 
-# Datenbankoperationen
-def execute_query(query, params=None, fetch=False):
+# Daten aus der Datenbank abrufen
+def get_data(query):
     with get_db_cursor() as (cursor, cnx):
         if cursor is None:
             return []
+        try:
+            cursor.execute(query)
+            return cursor.fetchall()
+        except Error as e:
+            st.error(f"Error executing query: {e}")
+            return []
+
+# Daten in die Datenbank schreiben
+def push_data(query, params=None):
+    with get_db_cursor() as (cursor, cnx):
+        if cursor is None:
+            return
         try:
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            if fetch:
-                return cursor.fetchall()
-            else:
-                cnx.commit()
+            cnx.commit()
         except Error as e:
             st.error(f"Error executing query: {e}")
-            return []
-
-# Daten aus der Datenbank abrufen
-def get_data(query):
-    return execute_query(query, fetch=True)
-
-# Daten in die Datenbank schreiben
-def push_data(query, params=None):
-    execute_query(query, params=params)
 
 # Daten speichern in der Datenbank
-def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids, answer_id):
+def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
+    answer_id = qna_ids_list[st.session_state['dataset_index']][0]
     for i, (evaluation, additional_text) in enumerate(zip(evaluations, additional_texts)):
         groundtruthsegment_id = groundtruth_ids[i]
         query = """
@@ -73,18 +74,18 @@ def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids,
 # Caching der Groundtruths und Answersegments
 @st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_sorted_groundtruths(question_id):
-    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGMENTS WHERE question_id = '{question_id}'")
+    groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGMENTS WHERE question_id = '{str(question_id)}'")
     return sorted(groundtruths, key=lambda x: x[2])
 
 @st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_sorted_answersegments(answer_id):
-    answersegments = get_data(f"SELECT * FROM ANSWERSEGMENTS WHERE answer_id = '{answer_id}'")
+    answersegments = get_data(f"SELECT * FROM ANSWERSEGMENTS WHERE answer_id = '{str(answer_id)}'")
     return sorted(answersegments, key=lambda x: x[2])
 
 @st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_question_text(question_id):
-    question_text = get_data(f"SELECT question FROM QUESTIONS WHERE question_id = '{question_id}'")
-    return question_text[0][0] if question_text else ""
+    question_text = get_data(f"SELECT question FROM QUESTIONS WHERE question_id = '{str(question_id)}'")
+    return question_text[0][0]
 
 # Streamlit-State initialisieren
 def initialize_state():
@@ -113,6 +114,7 @@ def render_navigation():
 def render_reviewer_info():
     st.sidebar.title("Daten speichern")
 
+    # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
     allowed_ids = ["6452","8640","3224","6511","5445"]
@@ -121,13 +123,13 @@ def render_reviewer_info():
     else:
         st.session_state['error_message'] = ""
 
+    # Senden-Button anzeigen
     st.sidebar.button("Senden", 
         on_click=lambda: save_data_to_db(
             st.session_state['evaluations'][st.session_state['dataset_index']],
             st.session_state['additional_texts'][st.session_state['dataset_index']],
             reviewer_id,
-            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index']][1])],
-            qna_ids_list[st.session_state['dataset_index'][0]]
+            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index']][1])]
         ), 
         key="senden", 
         disabled=bool(st.session_state['error_message'])
@@ -161,14 +163,19 @@ def render_main_content():
         for i, groundtruth in enumerate(sorted_groundtruths):
             sub_col1, sub_col2, sub_col3 = st.columns([3, 1, 2])
             with sub_col1:
-                st.write(groundtruth[3], groundtruth[4])
+                if len(sorted_groundtruths) > 1:
+                    st.write(groundtruth[3], groundtruth[4])  # 3 = Index, 4 = Text
+                else:
+                    st.write("Auf Basis der Leitlinie konnte keine Antwort gegeben werden.")
             with sub_col2:
                 eval_value = st.selectbox(f'Bewertung', range(5), key=f"eval_{current_index}_{i}")
                 evaluation.append(eval_value)
             with sub_col3:
                 additional_text = st.text_input(f'Relevante Referenzen', key=f"num_{current_index}_{i}")
                 additional_texts.append(additional_text)
-                if not all(char in "0123456789," for char in additional_text):
+                # Überprüfung der Texteingaben auf ungültige Zeichen
+                allowed_values = [""] + [str(num) for num in range(10)] + [","]
+                if not all(char in allowed_values for char in additional_text):
                     st.error("Bitte geben Sie Zahlen ein. Trennen Sie mehrere Zahlen durch Kommata ab. Leere Felder sind erlaubt.")
         st.session_state['evaluations'][current_index] = evaluation
         st.session_state['additional_texts'][current_index] = additional_texts
@@ -178,13 +185,14 @@ def render_main_content():
         sorted_answersegments = get_sorted_answersegments(qna_ids_list[current_index][0])
         st.write(len(sorted_answersegments), "Aussagen gefunden.")
         for answer in sorted_answersegments:
-            st.write(answer[2], answer[3])
+            st.write(answer[2], answer[3])  # 2 = Index, 3 = Text
 
 # Setzen Sie das Layout auf "wide"
 st.set_page_config(layout="wide")
 
 # Datenabfrage
 qna_ids_query = "SELECT answer_id, question_id FROM ANSWERS"
+
 qna_ids_list = get_data(qna_ids_query)
 
 # Initialisierung des States
