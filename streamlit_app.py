@@ -16,10 +16,19 @@ def get_db_connection():
 def get_data(query):
     cnx = get_db_connection()
     cursor = cnx.cursor()
-    cursor.execute(query)
-    response = cursor.fetchall()
-    cursor.close()
-    return response
+    response = None
+    try:
+        cursor.execute(query)
+        response = cursor.fetchall()
+        cursor.close()
+        cnx.close()
+        print("Data fetched successfully")
+        return response
+    except Exception as e:
+        print("Error:", e)
+        cursor.close()
+        cnx.close()
+
 
 # Daten in die Datenbank schreiben
 def push_data(query, params=None):
@@ -31,6 +40,7 @@ def push_data(query, params=None):
         cursor.execute(query)
     cnx.commit()
     cursor.close()
+    cnx.close()
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
@@ -88,6 +98,7 @@ def render_navigation():
     with col4:
         st.button("+5", on_click=lambda: st.session_state.update(dataset_index=min(len(qna_ids_list) - 1, st.session_state['dataset_index'] + 5)), key="5_vor")
 
+
 # UI-Elemente für Prüferinformationen und Anweisungen
 def render_reviewer_info():
     st.sidebar.title("Daten speichern")
@@ -95,7 +106,7 @@ def render_reviewer_info():
     # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
-    allowed_ids = st.secrets["reviewer_ids"]
+    allowed_ids = ["6452","8640","3224","6511"]
     if reviewer_id not in allowed_ids:
         st.session_state['error_message'] = "Ungültige Prüfer ID. Bitte wählen Sie eine gültige ID aus der Liste."
     else:
