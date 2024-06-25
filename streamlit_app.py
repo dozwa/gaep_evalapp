@@ -1,46 +1,63 @@
 import streamlit as st
 import mysql.connector
+from mysql.connector import Error
+from contextlib import contextmanager
 
 # Caching für die Datenbankverbindung
 @st.cache_resource
 def get_db_connection():
-    return mysql.connector.connect(
-        user=st.secrets["user"],
-        password=st.secrets["password"],
-        host=st.secrets["host"],
-        database=st.secrets["database"],
-        port=st.secrets["port"]
-    )
+    try:
+        connection = mysql.connector.connect(
+            user=st.secrets["user"],
+            password=st.secrets["password"],
+            host=st.secrets["host"],
+            database=st.secrets["database"],
+            port=st.secrets["port"]
+        )
+        if connection.is_connected():
+            return connection
+    except Error as e:
+        st.error(f"Error connecting to MySQL database: {e}")
+        return None
+
+# Kontextmanager für Datenbankverbindungen
+@contextmanager
+def get_db_cursor():
+    cnx = get_db_connection()
+    if cnx is None:
+        yield None, None
+    else:
+        cursor = cnx.cursor()
+        try:
+            yield cursor, cnx
+        finally:
+            cursor.close()
 
 # Daten aus der Datenbank abrufen
 def get_data(query):
-    cnx = get_db_connection()
-    cursor = cnx.cursor()
-    response = None
-    try:
-        cursor.execute(query)
-        response = cursor.fetchall()
-        cursor.close()
-        cnx.close()
-        print("Data fetched successfully")
-        return response
-    except Exception as e:
-        print("Error:", e)
-        cursor.close()
-        cnx.close()
-
+    with get_db_cursor() as (cursor, cnx):
+        if cursor is None:
+            return []
+        try:
+            cursor.execute(query)
+            return cursor.fetchall()
+        except Error as e:
+            st.error(f"Error executing query: {e}")
+            return []
 
 # Daten in die Datenbank schreiben
 def push_data(query, params=None):
-    cnx = get_db_connection()
-    cursor = cnx.cursor()
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-    cnx.commit()
-    cursor.close()
-    cnx.close()
+    with get_db_cursor() as (cursor, cnx):
+        if cursor is None:
+            return
+        try:
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            cnx.commit()
+        except Error as e:
+            st.error(f"Error executing query: {e}")
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
@@ -54,17 +71,17 @@ def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids)
         push_data(query, params)
 
 # Caching der Groundtruths und Answersegments
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_sorted_groundtruths(question_id):
     groundtruths = get_data(f"SELECT * FROM GROUNDTRUTHSEGMENTS WHERE question_id = '{str(question_id)}'")
     return sorted(groundtruths, key=lambda x: x[2])
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_sorted_answersegments(answer_id):
     answersegments = get_data(f"SELECT * FROM ANSWERSEGMENTS WHERE answer_id = '{str(answer_id)}'")
     return sorted(answersegments, key=lambda x: x[2])
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)  # Cache für eine Stunde
 def get_question_text(question_id):
     question_text = get_data(f"SELECT question FROM QUESTIONS WHERE question_id = '{str(question_id)}'")
     return question_text[0][0]
@@ -88,16 +105,9 @@ def initialize_state():
 # UI-Elemente für die Navigation
 def render_navigation():
     st.sidebar.title("Navigation")
-    col1, col2, col3, col4 = st.sidebar.columns(4)
-    with col1:
-        st.button("-5", on_click=lambda: st.session_state.update(dataset_index=max(0, st.session_state['dataset_index'] - 5)), key="5_zurück")
-    with col2:
-        st.button("-1", on_click=lambda: st.session_state.update(dataset_index=max(0, st.session_state['dataset_index'] - 1)), key="zurück")
-    with col3:
-        st.button("+1", on_click=lambda: st.session_state.update(dataset_index=min(len(qna_ids_list) - 1, st.session_state['dataset_index'] + 1)), key="vor")
-    with col4:
-        st.button("+5", on_click=lambda: st.session_state.update(dataset_index=min(len(qna_ids_list) - 1, st.session_state['dataset_index'] + 5)), key="5_vor")
-
+    options = [f"Datensatz {i+1}" for i in range(len(qna_ids_list))]
+    selected_option = st.sidebar.selectbox("Wählen Sie einen Datensatz", options)
+    st.session_state['dataset_index'] = options.index(selected_option)
 
 # UI-Elemente für Prüferinformationen und Anweisungen
 def render_reviewer_info():
@@ -118,7 +128,7 @@ def render_reviewer_info():
             st.session_state['evaluations'][st.session_state['dataset_index']],
             st.session_state['additional_texts'][st.session_state['dataset_index']],
             reviewer_id,
-            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index'][1]])]
+            [gt[0] for gt in get_sorted_groundtruths(qna_ids_list[st.session_state['dataset_index']][1])]
         ), 
         key="senden", 
         disabled=bool(st.session_state['error_message'])
