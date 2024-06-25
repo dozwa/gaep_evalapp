@@ -61,13 +61,14 @@ def push_data(query, params=None):
 
 # Daten speichern in der Datenbank
 def save_data_to_db(evaluations, additional_texts, reviewer_id, groundtruth_ids):
+    answer_id = qna_ids_list[st.session_state['dataset_index']][0]
     for i, (evaluation, additional_text) in enumerate(zip(evaluations, additional_texts)):
         groundtruthsegment_id = groundtruth_ids[i]
         query = """
-            INSERT INTO RATINGS (groundtruthsegment_id, answersegments, reviewer_id, rating)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO RATINGS (groundtruthsegment_id, answersegments, reviewer_id, rating, answer_id)
+            VALUES (%s, %s, %s, %s, %s)
         """
-        params = (groundtruthsegment_id, additional_text, reviewer_id, evaluation)
+        params = (groundtruthsegment_id, additional_text, reviewer_id, evaluation, answer_id)
         push_data(query, params)
 
 # Caching der Groundtruths und Answersegments
@@ -116,7 +117,7 @@ def render_reviewer_info():
     # Prüfer ID validieren
     global reviewer_id
     reviewer_id = st.sidebar.text_input("Prüfer ID:", key="prüfer_id")
-    allowed_ids = st.secrets["reviewer_ids"]
+    allowed_ids = ["6452","8640","3224","6511"]
     if reviewer_id not in allowed_ids:
         st.session_state['error_message'] = "Ungültige Prüfer ID. Bitte wählen Sie eine gültige ID aus der Liste."
     else:
@@ -144,7 +145,6 @@ def render_reviewer_info():
     * 3 – Inhalt der Groundtruth ist nicht zum großen Teil durch die Antwortsegmente abgebildet
     * 4 – Inhalt der Groundtruth ist vollständig durch die Antwortsegmente abgebildet""")
     st.sidebar.markdown("Zusätzlich sollen für jede Groundtruth-Aussage die relevanten Aussagen aus den Antwortsegmenten angegeben, die zur Abdeckung beigetragen haben. Bitte referenzieren Sie die Antwortsegmente mit ihren Indizes. Trennen Sie diese mit einem Komma. Beispiel: `1,3,5`")
-
 # Hauptinhalt rendern
 def render_main_content():
     current_index = st.session_state['dataset_index']
